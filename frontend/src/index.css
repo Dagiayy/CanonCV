@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+/*
+  Design read: internal ML-ops data tool (dataset labeling / normalization admin)
+  for a small technical team. Product-app language, not marketing — no hero/eyebrow/
+  bento/marquee mechanics. iOS system palette + system font stack (renders actual
+  SF Pro on Apple devices), one shape rule (cards 16px / controls 12px / pills full),
+  spring easing on transform+opacity only. Light theme primary.
+*/
+@theme {
+  --color-canvas: #f2f2f7;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfbfd;
+  --color-border: #e5e5ea;
+  --color-border-strong: #d1d1d6;
+
+  --color-ink: #1c1c1e;
+  --color-ink-2: #6e6e73;
+  --color-ink-3: #aeaeb2;
+
+  --color-accent: #007aff;
+  --color-accent-strong: #0064d1;
+  --color-danger: #ff3b30;
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-violet: #af52de;
+
+  --radius-control: 0.75rem;
+  --radius-card: 1rem;
+  --radius-sheet: 1.5rem;
+
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-canvas text-ink antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* ---- Shared primitives ---- */
+
+.card {
+  @apply rounded-card border border-border bg-surface;
+  box-shadow: 0 1px 2px rgba(28, 28, 30, 0.04), 0 1px 1px rgba(28, 28, 30, 0.03);
+}
+
+.card-interactive {
+  @apply rounded-card border border-border bg-surface transition-all duration-200;
+  box-shadow: 0 1px 2px rgba(28, 28, 30, 0.04), 0 1px 1px rgba(28, 28, 30, 0.03);
+  transition-timing-function: var(--ease-spring);
+}
+.card-interactive:hover {
+  @apply border-border-strong;
+  box-shadow: 0 8px 24px rgba(28, 28, 30, 0.08), 0 2px 6px rgba(28, 28, 30, 0.04);
+  transform: translateY(-1px);
+}
+.card-interactive:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* Pair with a variant: className="btn btn-primary" */
+.btn {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-control text-sm font-medium
+    transition-all disabled:cursor-not-allowed disabled:opacity-40;
+  transition-timing-function: var(--ease-spring);
+  transition-duration: 150ms;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn-primary {
+  @apply bg-accent px-3.5 py-2 text-white hover:bg-accent-strong;
+}
+.btn-secondary {
+  @apply border border-border bg-surface px-3.5 py-2 text-ink hover:bg-surface-2 hover:border-border-strong;
+}
+.btn-ghost {
+  @apply px-3 py-1.5 text-ink-2 hover:bg-black/[0.04] hover:text-ink;
+}
+.btn-danger {
+  @apply bg-danger px-3.5 py-2 text-white hover:brightness-95;
+}
+
+.input,
+select.input,
+textarea.input {
+  @apply w-full rounded-control border border-border bg-surface px-3 py-2 text-sm text-ink
+    placeholder:text-ink-3 transition-all outline-none;
+  transition-timing-function: var(--ease-spring);
+}
+.input:focus {
+  @apply border-accent;
+  box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.badge {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide;
+}
+
+.segmented {
+  @apply inline-flex items-center gap-0.5 rounded-full border border-border bg-surface-2 p-1;
+}
+.segmented-item {
+  @apply relative rounded-full px-3.5 py-1.5 text-sm font-medium text-ink-2 transition-all;
+  transition-timing-function: var(--ease-spring);
+  transition-duration: 200ms;
+}
+.segmented-item:hover:not([data-active="true"]) {
+  @apply text-ink;
+}
+.segmented-item[data-active="true"] {
+  @apply bg-surface text-ink shadow-sm;
+}
+
+.glass-nav {
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-nav {
+    background: var(--color-surface);
+    backdrop-filter: none;
+  }
+}
+
+/* ---- Motion ---- */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+@keyframes spin-smooth {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 320ms var(--ease-spring) both;
+}
+.animate-fade-scale-in {
+  animation: fade-scale-in 220ms var(--ease-spring) both;
+}
+.animate-sheet-in {
+  animation: sheet-in 280ms var(--ease-spring) both;
+}
+.skeleton {
+  @apply rounded-control bg-black/[0.06];
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, black 6%, transparent) 25%,
+    color-mix(in srgb, black 10%, transparent) 37%,
+    color-mix(in srgb, black 6%, transparent) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+.spinner {
+  animation: spin-smooth 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Stagger helper: set --stagger-index on each item's inline style */
+.stagger-item {
+  animation-delay: calc(var(--stagger-index, 0) * 40ms);
+}

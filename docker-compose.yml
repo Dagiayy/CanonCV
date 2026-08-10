@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - RAW_DATASETS_DIR=/data/raw
+      - DATA_DIR=/data/store
+      - YOLO26_WEIGHTS=/app/models/yolo26s-seg.pt
+    volumes:
+      - "./normalization datases:/data/raw"
+      - "./data:/data/store"
+      - "./models:/app/models"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

@@ -1,0 +1,35 @@
+# --- AI assistant tooling — internal working notes, not part of the shipped project ---
+.claude/
+CLAUDE.md
+
+# --- Data: raw datasets, normalized output, generated app state ---
+# Never committed — see normalization datases/README.md and data/README.md for
+# what goes here and how to (re)populate it. (Ignoring contents rather than the
+# directory itself so the READMEs below stay tracked.)
+normalization datases/*
+!normalization datases/README.md
+data/*
+!data/README.md
+
+# --- Model weights ---
+# Never committed (large binaries) — see models/README.md for how to obtain them.
+models/*.pt
+models/*.onnx
+models/*.engine
+
+# --- Python (backend) ---
+backend/.venv/
+backend/vendor/
+**/__pycache__/
+*.pyc
+
+# --- Node (frontend) ---
+frontend/node_modules/
+frontend/dist/
+
+# --- Logs / local debug artifacts ---
+*.log
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
