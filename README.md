@@ -1,14 +1,15 @@
-# AATB Bicycle Counting — Dataset Normalization & Annotation Platform
+# CanonCV — Universal Computer Vision Dataset Engine & Annotation Studio
 
-Computer-vision data pipeline for a camera + radar bicycle counting system
-(Addis Ababa Transport Bureau, ITS modernization pilot). This repo covers the
-**data side** of that project: turning a pile of externally-sourced,
-inconsistently-labeled traffic/NMT datasets into one clean, canonically-labeled,
-versioned dataset ready for fine-tuning — plus the tooling to build, inspect,
-and correct that data by hand.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/Frontend-React-61DAFB?style=flat-square&logo=react)](https://react.dev/)
+[![YOLO26](https://img.shields.io/badge/AI_Assisted-YOLO26-blue?style=flat-square)](https://ultralytics.com)
 
-Model training itself is out of scope here; see `normalization.md` for the
-full design rationale.
+**CanonCV** is an end-to-end computer vision data engine for dataset ETL, canonical label taxonomy normalization, data quality auditing, AI-assisted annotation, and versioned data lineage. 
+
+While designed to handle dataset workflows for **any computer vision project and custom taxonomy**, this repository includes a full production-tested implementation seeded for multimodal urban traffic & NMT (Non-Motorized Transport) detection (developed under an ITS modernization pilot for the Addis Ababa Transport Bureau).
+
+Model training itself is out of scope here; see [`normalization.md`](file:///d:/GREEN/AATB%20CV/normalization.md) for the full design rationale.
 
 ## What's in here
 
