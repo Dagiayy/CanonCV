@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Trash } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, MagnifyingGlassMinus, MagnifyingGlassPlus, Trash } from "@phosphor-icons/react";
+
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 1.25;
 
 const HANDLES = ["nw", "ne", "sw", "se"];
 let nextLocalId = 1;
@@ -42,10 +46,40 @@ export default function BoxCanvas({
   minBoxSize = 0.006,
 }) {
   const containerRef = useRef(null);
+  const imgRef = useRef(null);
+  const pendingBoxRef = useRef(null);
+  const editBarRef = useRef(null);
   const [drawRect, setDrawRect] = useState(null); // in-progress draw, screen-space normalized
   const [pendingBox, setPendingBox] = useState(null); // finished draw awaiting class pick, boxes mode
   const [selectedId, setSelectedId] = useState(null);
   const dragRef = useRef(null); // { type: 'move'|'resize'|'draw'|'crop', ... }
+
+  // Zoom: 1 = "fit" sizing (CSS max-h/max-w, the default). >1 switches to an
+  // explicit pixel width (a multiple of the fit-width measured on image load)
+  // so the user can zoom in to place boxes precisely; the outer wrapper then
+  // scrolls to pan. Box overlays stay aligned at any zoom because they're
+  // percentage-positioned relative to this same container, and toNorm reads
+  // the container's actual (zoomed) getBoundingClientRect — no separate
+  // coordinate transform needed.
+  const [zoom, setZoom] = useState(1);
+  const [fitWidth, setFitWidth] = useState(null);
+
+  const handleImgLoad = () => {
+    if (imgRef.current) setFitWidth(imgRef.current.getBoundingClientRect().width);
+  };
+  const zoomIn = () => setZoom((z) => Math.min(ZOOM_MAX, +(z * ZOOM_STEP).toFixed(2)));
+  const zoomOut = () => setZoom((z) => Math.max(ZOOM_MIN, +(z / ZOOM_STEP).toFixed(2)));
+  const zoomReset = () => setZoom(1);
+
+  // Keep the class-picker popup and the selected-box edit toolbar visible when
+  // they'd otherwise land outside the current scroll viewport (e.g. a box
+  // drawn near the bottom edge while zoomed in).
+  useEffect(() => {
+    if (pendingBox) pendingBoxRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [pendingBox]);
+  useEffect(() => {
+    if (selectedId != null) editBarRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selectedId]);
 
   const toNorm = useCallback((clientX, clientY) => {
     const el = containerRef.current;
@@ -194,14 +228,43 @@ export default function BoxCanvas({
   const activeClasses = (taxonomyClasses || []).filter((c) => !c.deprecated);
 
   return (
-    <div
-      ref={containerRef}
-      data-canvas-bg
-      onMouseDown={startDraw}
-      className="relative w-full select-none rounded-card bg-black"
-      style={{ cursor: mode === "crop" ? "crosshair" : "default" }}
-    >
-      <img src={imageUrl} alt="" data-canvas-bg draggable={false} className="pointer-events-none block w-full rounded-card" />
+    <div className="space-y-2">
+      <div className="flex items-center justify-end gap-1.5">
+        <span className="mr-1 text-[11px] font-semibold text-slate-400">Zoom to draw precisely</span>
+        <button type="button" onClick={zoomOut} disabled={zoom <= ZOOM_MIN} className="btn btn-secondary !p-1.5" title="Zoom out">
+          <MagnifyingGlassMinus size={14} weight="bold" />
+        </button>
+        <span className="w-11 text-center font-mono text-xs font-bold text-slate-600">{Math.round(zoom * 100)}%</span>
+        <button type="button" onClick={zoomIn} disabled={zoom >= ZOOM_MAX} className="btn btn-secondary !p-1.5" title="Zoom in">
+          <MagnifyingGlassPlus size={14} weight="bold" />
+        </button>
+        <button type="button" onClick={zoomReset} disabled={zoom === 1} className="btn btn-secondary !p-1.5" title="Reset zoom">
+          <ArrowCounterClockwise size={14} weight="bold" />
+        </button>
+      </div>
+
+      <div className="w-full overflow-auto rounded-card bg-black text-center" style={{ maxHeight: "70vh" }}>
+        <div
+          ref={containerRef}
+          data-canvas-bg
+          onMouseDown={startDraw}
+          className="relative inline-block select-none"
+          style={{ cursor: mode === "crop" ? "crosshair" : "default" }}
+        >
+          <img
+            ref={imgRef}
+            src={imageUrl}
+            alt=""
+            data-canvas-bg
+            draggable={false}
+            onLoad={handleImgLoad}
+            className="pointer-events-none block rounded-card"
+            style={
+              zoom === 1 || !fitWidth
+                ? { maxHeight: "70vh", width: "auto", maxWidth: "100%" }
+                : { width: `${fitWidth * zoom}px`, height: "auto", maxWidth: "none", maxHeight: "none" }
+            }
+          />
 
       {mode === "boxes" &&
         boxes.map((b) => {
@@ -239,7 +302,7 @@ export default function BoxCanvas({
                       }}
                     />
                   ))}
-                  <div className="absolute -bottom-9 left-0 flex items-center gap-1 rounded-control border border-border bg-surface p-1 shadow-lg">
+                  <div ref={editBarRef} className="absolute -bottom-9 left-0 flex items-center gap-1 rounded-control border border-border bg-surface p-1 shadow-lg">
                     <select
                       value={b.class_id ?? ""}
                       onChange={(e) => {
@@ -299,6 +362,7 @@ export default function BoxCanvas({
 
       {pendingBox && (
         <div
+          ref={pendingBoxRef}
           className="absolute z-20 flex items-center gap-1 rounded-control border border-border bg-surface p-1 shadow-lg"
           style={{ left: `${pendingBox.x * 100}%`, top: `${(pendingBox.y + pendingBox.h) * 100}%` }}
           onMouseDown={(e) => e.stopPropagation()}
@@ -326,6 +390,8 @@ export default function BoxCanvas({
           </button>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

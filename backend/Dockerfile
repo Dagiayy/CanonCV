@@ -10,8 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # CPU-only torch build (~200MB) instead of the default CUDA-bundled PyPI wheel
 # (~770MB) — this is a CPU-inference-only service, no GPU in the deployment target.
+# torchvision MUST come from this same index/install call: ultralytics also
+# depends on torchvision, and letting a separate `pip install -r requirements.txt`
+# pull it from the default PyPI index gives you a build compiled against a
+# different torch ABI than the CPU wheel above, which loads without error but
+# fails at call time with "operator torchvision::nms does not exist" the first
+# time detection (NMS) actually runs.
 COPY requirements.txt .
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision \
     && pip install --no-cache-dir -r requirements.txt \
     # ultralytics pulls in plain opencv-python, which needs a GUI/X11/OpenGL/mesa
     # stack (libgl1, libllvm19, ...) we'd otherwise have to apt-install just to

@@ -225,6 +225,13 @@ def browse_images(
     if ds.scan_status != "scanned":
         raise HTTPException(400, "dataset has not been successfully scanned yet")
 
+    # Deliberately a full scan, not an early-exit once "enough" distinct images are
+    # seen: some source formats (COCO JSON in particular) list annotations in one
+    # flat array, not grouped by image, so stopping early could truncate the boxes
+    # of the last image on a page if that image's remaining boxes appear later in
+    # the stream — a silent, hard-to-spot corruption exactly like the one CLAUDE.md
+    # ยง4.3 warns about. Use GET .../images/count for cheap pagination totals instead
+    # of trying to derive them from a truncated scan here.
     adapter = get_adapter(ds.source_format)
     by_image: dict[str, dict] = {}
     order: list[str] = []
@@ -244,10 +251,6 @@ def browse_images(
                 "boxes": [],
             }
         by_image[key]["boxes"].append({"label": ann.source_label, "bbox": list(ann.bbox)})
-        # early exit once we have one page past what's needed, to avoid a full scan
-        # of very large datasets just to render an early/mid page
-        if len(order) >= offset + limit + 1:
-            break
 
     page_keys = order[offset : offset + limit]
     has_more = len(order) > offset + limit
@@ -255,6 +258,35 @@ def browse_images(
     for it in items:
         it["image_url"] = f"/media/raw-image?dataset_id={dataset_id}&path={it['image_path']}"
     return {"items": items, "offset": offset, "limit": limit, "has_more": has_more}
+
+
+@router.get("/datasets/{dataset_id}/images/count")
+def count_images(
+    dataset_id: str,
+    label: str | None = Query(default=None),
+    split: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Cheap companion to /images: single pass over annotations tracking only
+    distinct image keys (no box lists retained), so the frontend can render a
+    real "Page X of Y" instead of an unbounded "Load more" — a dataset can run
+    into the thousands of images, and unpaginated browsing was the actual
+    complaint (see CLAUDE.md working conventions on scaling to new sites)."""
+    ds = db.query(models.Dataset).filter_by(id=dataset_id).one_or_none()
+    if ds is None:
+        raise HTTPException(404, "dataset not found")
+    if ds.scan_status != "scanned":
+        raise HTTPException(400, "dataset has not been successfully scanned yet")
+
+    adapter = get_adapter(ds.source_format)
+    seen: set[str] = set()
+    for ann in adapter.read_annotations(resolve_raw_path(ds)):
+        if label and ann.source_label != label:
+            continue
+        if split and ann.split != split:
+            continue
+        seen.add(str(ann.image_path))
+    return {"total": len(seen)}
 
 
 @router.get("/media/raw-image")

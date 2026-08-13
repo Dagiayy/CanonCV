@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useProject } from "../ProjectContext";
 import { Annotate, Projects, mediaUrl } from "../api";
 import BoxCanvas from "../components/BoxCanvas";
+import Spinner from "../components/Spinner";
 import {
   ArrowsClockwise,
+  CaretLeft,
+  CaretRight,
   Copy,
   Crop as CropIcon,
   FloppyDisk,
   MagicWand,
+  PencilSimple,
   Sparkle,
   Trash,
   UploadSimple,
@@ -15,6 +20,25 @@ import {
 
 function sanitizeFolderName(name) {
   return name.replace(/[<>:"/\\|?*]/g, "").trim();
+}
+
+// Resume-where-you-left-off: last folder/image are cached per browser tab so a
+// refresh (or navigating away and back) doesn't drop you back at square one.
+// An explicit ?folder=/?file= deep link (e.g. from Browse Images' "Edit" button)
+// always wins over whatever was cached.
+function readSessionSafe(key) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeSessionSafe(key, value) {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // storage unavailable (private browsing quota, etc.) — silently skip caching
+  }
 }
 
 function ImportFolderButton({ projectId, onImported }) {
@@ -41,14 +65,21 @@ function ImportFolderButton({ projectId, onImported }) {
     }
   };
 
+  const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+
   return (
     <div className="relative">
       <input ref={inputRef} type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={handlePick} />
-      <button onClick={() => inputRef.current?.click()} disabled={uploading} className="btn btn-secondary">
-        <UploadSimple size={14} weight="bold" />
-        {uploading ? `Uploading ${progress.done}/${progress.total}…` : "Import folder"}
+      <button onClick={() => inputRef.current?.click()} disabled={uploading} className="btn btn-secondary text-xs">
+        {uploading ? <Spinner size={15} /> : <UploadSimple size={15} weight="bold" />}
+        {uploading ? `Uploading ${progress.done}/${progress.total}…` : "Import Folder"}
       </button>
-      {error && <p className="absolute right-0 top-full z-10 mt-1 w-64 rounded-control bg-danger/10 p-2 text-xs text-danger">{error}</p>}
+      {uploading && progress.total > 0 && (
+        <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-indigo-600 transition-all duration-200" style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      {error && <p className="absolute right-0 top-full z-10 mt-1 w-64 rounded-xl bg-rose-50 border border-rose-200 p-2 text-xs text-rose-700">{error}</p>}
     </div>
   );
 }
@@ -63,34 +94,35 @@ function withLocalIds(boxes) {
 function AugmentPanel({ onRun, onClose, running }) {
   const [ops, setOps] = useState([]);
   const OPTIONS = [
-    { id: "flip_h", label: "Flip horizontal" },
-    { id: "flip_v", label: "Flip vertical" },
+    { id: "flip_h", label: "Flip Horizontal" },
+    { id: "flip_v", label: "Flip Vertical" },
     { id: "rotate90", label: "Rotate 90°" },
     { id: "rotate180", label: "Rotate 180°" },
     { id: "rotate270", label: "Rotate 270°" },
     { id: "brightness_up", label: "Brighter" },
     { id: "brightness_down", label: "Darker" },
-    { id: "contrast_up", label: "More contrast" },
-    { id: "contrast_down", label: "Less contrast" },
+    { id: "contrast_up", label: "More Contrast" },
+    { id: "contrast_down", label: "Less Contrast" },
   ];
   const toggle = (id) => setOps((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]));
 
   return (
-    <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-xl">
-      <p className="mb-2 text-xs font-semibold text-ink">Generate augmented copy</p>
+    <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+      <p className="mb-2 text-xs font-bold text-slate-800">Generate Augmented Variant</p>
       <div className="mb-3 grid grid-cols-2 gap-1.5">
         {OPTIONS.map((o) => (
-          <label key={o.id} className="flex items-center gap-1.5 text-xs text-ink-2">
-            <input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={ops.includes(o.id)} onChange={() => toggle(o.id)} />
+          <label key={o.id} className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+            <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5" checked={ops.includes(o.id)} onChange={() => toggle(o.id)} />
             {o.label}
           </label>
         ))}
       </div>
-      <div className="flex justify-end gap-2">
-        <button onClick={onClose} className="btn btn-ghost !py-1 text-xs">
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
+        <button onClick={onClose} className="btn btn-ghost text-xs py-1">
           Cancel
         </button>
-        <button onClick={() => onRun(ops)} disabled={ops.length === 0 || running} className="btn btn-primary !py-1 text-xs">
+        <button onClick={() => onRun(ops)} disabled={ops.length === 0 || running} className="btn btn-primary text-xs py-1">
+          {running && <Spinner size={13} />}
           {running ? "Generating…" : "Generate"}
         </button>
       </div>
@@ -100,8 +132,15 @@ function AugmentPanel({ onRun, onClose, running }) {
 
 export default function AnnotatePage() {
   const { projectId } = useProject();
+  const [searchParams] = useSearchParams();
+  // basename to auto-select once this folder's images load, from a ?file= deep link or the
+  // last-viewed image cached for this folder (useRef's initial-value argument is only
+  // consumed on the very first render, which is exactly what we want here)
+  const pendingFileRef = useRef(
+    searchParams.get("file") || readSessionSafe(`annotate.lastFile.${searchParams.get("folder") || readSessionSafe("annotate.lastFolder") || ""}`)
+  );
   const [folders, setFolders] = useState([]);
-  const [folder, setFolder] = useState("");
+  const [folder, setFolder] = useState(() => searchParams.get("folder") || readSessionSafe("annotate.lastFolder") || "");
   const [taxonomy, setTaxonomy] = useState(null);
   const [images, setImages] = useState([]);
   const [hasMore, setHasMore] = useState(false);
@@ -109,7 +148,7 @@ export default function AnnotatePage() {
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [editBoxes, setEditBoxes] = useState([]);
   const [dirty, setDirty] = useState(false);
-  const [mode, setMode] = useState("boxes"); // boxes | crop
+  const [mode, setMode] = useState("boxes");
   const [cropRect, setCropRect] = useState(null);
   const [saving, setSaving] = useState(false);
   const [autoLabeling, setAutoLabeling] = useState(false);
@@ -147,6 +186,22 @@ export default function AnnotatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folder]);
 
+  // Auto-start on the first image (or the one requested via ?file=) as soon as a
+  // folder's images are in — no more staring at a bare grid and having to click
+  // before you can start labeling.
+  useEffect(() => {
+    if (images.length === 0 || selectedIdx !== null) return;
+    const targetFile = pendingFileRef.current;
+    pendingFileRef.current = null;
+    let idx = 0;
+    if (targetFile) {
+      const found = images.findIndex((img) => img.filename.split("/").pop() === targetFile);
+      if (found >= 0) idx = found;
+    }
+    selectImage(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [images]);
+
   const selectImage = (idx) => {
     if (dirty && !window.confirm("Discard unsaved changes to this image?")) return;
     setSelectedIdx(idx);
@@ -159,6 +214,13 @@ export default function AnnotatePage() {
 
   const current = selectedIdx != null ? images[selectedIdx] : null;
 
+  useEffect(() => {
+    if (folder) writeSessionSafe("annotate.lastFolder", folder);
+  }, [folder]);
+  useEffect(() => {
+    if (folder && current) writeSessionSafe(`annotate.lastFile.${folder}`, current.filename);
+  }, [folder, current]);
+
   const setBoxes = (next) => {
     setEditBoxes(next);
     setDirty(true);
@@ -167,7 +229,7 @@ export default function AnnotatePage() {
   const unresolvedCount = editBoxes.filter((b) => b.class_id == null).length;
 
   const save = async () => {
-    if (!current || unresolvedCount > 0) return;
+    if (!current || unresolvedCount > 0) return false;
     setSaving(true);
     setError("");
     try {
@@ -179,13 +241,26 @@ export default function AnnotatePage() {
       );
       setImages((prev) => prev.map((it, i) => (i === selectedIdx ? { ...it, boxes: editBoxes } : it)));
       setDirty(false);
-      setNotice("Saved");
+      setNotice("Saved successfully!");
       setTimeout(() => setNotice(""), 1500);
+      return true;
     } catch (err) {
       setError(err?.response?.data?.detail?.toString() || err.message);
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const goPrev = () => {
+    if (selectedIdx != null && selectedIdx > 0) selectImage(selectedIdx - 1);
+  };
+  const goNext = () => {
+    if (selectedIdx != null && selectedIdx < images.length - 1) selectImage(selectedIdx + 1);
+  };
+  const saveAndNext = async () => {
+    const ok = dirty ? await save() : true;
+    if (ok && selectedIdx != null && selectedIdx < images.length - 1) selectImage(selectedIdx + 1);
   };
 
   const applyCrop = async () => {
@@ -206,7 +281,7 @@ export default function AnnotatePage() {
       setMode("boxes");
       setCropRect(null);
       setCacheBust((c) => c + 1);
-      setNotice("Cropped");
+      setNotice("Image cropped successfully!");
       setTimeout(() => setNotice(""), 1500);
     } catch (err) {
       setError(err?.response?.data?.detail?.toString() || err.message);
@@ -217,7 +292,7 @@ export default function AnnotatePage() {
 
   const excludeCurrent = async () => {
     if (!current) return;
-    if (!window.confirm(`Remove "${current.filename}" from the working set? It moves to _excluded, not permanently deleted.`)) return;
+    if (!window.confirm(`Remove "${current.filename}" from working set?`)) return;
     await Annotate.exclude(projectId, folder, current.filename);
     setImages((prev) => prev.filter((_, i) => i !== selectedIdx));
     setSelectedIdx(null);
@@ -226,7 +301,7 @@ export default function AnnotatePage() {
 
   const copyCurrent = async () => {
     if (!current) return;
-    const target = window.prompt("Copy to which folder (under the raw datasets root)?", copyTargetRef.current || "");
+    const target = window.prompt("Copy to folder (under raw datasets root)?", copyTargetRef.current || "");
     if (!target) return;
     copyTargetRef.current = target;
     await Annotate.copy(projectId, folder, current.filename, target);
@@ -242,7 +317,7 @@ export default function AnnotatePage() {
       const res = await Annotate.augment(projectId, folder, current.filename, ops);
       setImages((prev) => [...prev, { filename: res.filename, boxes: res.boxes, image_url: res.image_url }]);
       setShowAugment(false);
-      setNotice("Augmented copy added to the list");
+      setNotice("Augmented copy added to dataset list!");
       setTimeout(() => setNotice(""), 2000);
     } catch (err) {
       setError(err?.response?.data?.detail?.toString() || err.message);
@@ -262,7 +337,7 @@ export default function AnnotatePage() {
       const added = withLocalIds(usable.map((b) => ({ class_id: b.class_id, label: b.label, color_hex: b.color_hex, bbox: b.bbox, suggested: true })));
       setBoxes([...editBoxes, ...added]);
       setNotice(
-        `Added ${added.length} suggested box${added.length === 1 ? "" : "es"}${skipped ? `, skipped ${skipped} unmapped detection${skipped === 1 ? "" : "s"} (draw manually)` : ""} · review before saving`
+        `Added ${added.length} suggested box${added.length === 1 ? "" : "es"}${skipped ? `, skipped ${skipped} unmapped detection${skipped === 1 ? "" : "s"}` : ""} · review before saving`
       );
       setTimeout(() => setNotice(""), 4000);
     } catch (err) {
@@ -273,19 +348,24 @@ export default function AnnotatePage() {
   };
 
   return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h2 className="text-[17px] font-semibold tracking-tight text-ink">Annotate</h2>
-          <p className="text-xs text-ink-2">Independent from dataset normalization · label straight into the canonical taxonomy</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">Annotation Studio</h2>
+            <span className="badge badge-accent">YOLO26 Powered</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Draw, adjust, crop, and auto-label bounding box annotations directly into the canonical taxonomy.
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <select className="input w-auto py-1.5 text-sm" value={folder} onChange={(e) => setFolder(e.target.value)}>
-            <option value="">Select a folder…</option>
+          <select className="input w-auto text-xs py-2 font-semibold" value={folder} onChange={(e) => setFolder(e.target.value)}>
+            <option value="">Select Raw Image Folder…</option>
             {folders.map((f) => (
               <option key={f.folder_name} value={f.folder_name}>
-                {f.folder_name} ({f.image_count}
-                {f.image_count_capped ? "+" : ""})
+                📁 {f.folder_name} ({f.image_count} images)
               </option>
             ))}
           </select>
@@ -294,10 +374,9 @@ export default function AnnotatePage() {
               Annotate.folders(projectId).then(setFolders);
               if (folder) loadImages(0, true);
             }}
-            className="btn btn-secondary"
+            className="btn btn-secondary text-xs"
           >
-            <ArrowsClockwise size={14} weight="bold" />
-            Refresh
+            <ArrowsClockwise size={15} weight="bold" />
           </button>
           <ImportFolderButton
             projectId={projectId}
@@ -310,63 +389,78 @@ export default function AnnotatePage() {
       </div>
 
       {!folder && (
-        <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-border py-20 text-center">
-          <p className="text-sm text-ink-2">Pick a folder with raw images to start annotating.</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center">
+          <Sparkle size={32} className="text-slate-300 mb-3" />
+          <p className="text-sm font-bold text-slate-800">No Image Folder Selected</p>
+          <p className="text-xs text-slate-400 mt-1">Select an existing folder above or import a new folder to start labeling.</p>
         </div>
       )}
 
       {folder && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
           <div>
-            {error && <p className="mb-3 rounded-control bg-danger/10 p-2.5 text-sm text-danger">{error}</p>}
-            {notice && <p className="mb-3 rounded-control bg-success/10 p-2.5 text-sm text-success">{notice}</p>}
+            {error && <p className="mb-3 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-semibold text-rose-700">{error}</p>}
+            {notice && <p className="mb-3 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-700">{notice}</p>}
 
             {!current && !loadingList && images.length > 0 && (
-              <div className="flex h-96 items-center justify-center rounded-card border border-dashed border-border text-sm text-ink-2">
-                Select an image below to start
-              </div>
-            )}
-            {!loadingList && images.length === 0 && (
-              <div className="flex h-96 items-center justify-center rounded-card border border-dashed border-border text-sm text-ink-2">
-                No images in this folder.
+              <div className="flex h-[450px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white text-sm text-slate-400">
+                Select an image from the gallery grid below to start editing
               </div>
             )}
 
             {current && taxonomy && (
-              <div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <span className="truncate font-mono text-xs text-ink-2">{current.filename}</span>
-                  <div className="relative flex items-center gap-1.5">
-                    <button onClick={runAutoLabel} disabled={autoLabeling} className="btn btn-secondary !py-1.5 text-xs">
-                      <Sparkle size={13} weight="bold" />
-                      {autoLabeling ? "Detecting…" : "Auto-label with YOLO26"}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                {/* Toolbar */}
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <button onClick={goPrev} disabled={selectedIdx === 0} className="btn btn-secondary !p-1.5" title="Previous image">
+                      <CaretLeft size={14} weight="bold" />
+                    </button>
+                    <span className="font-mono text-xs font-bold text-slate-700 truncate">
+                      {current.filename} <span className="text-slate-400 font-sans font-semibold">({selectedIdx + 1}/{images.length})</span>
+                    </span>
+                    <button onClick={goNext} disabled={selectedIdx === images.length - 1} className="btn btn-secondary !p-1.5" title="Next image">
+                      <CaretRight size={14} weight="bold" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={runAutoLabel} disabled={autoLabeling} className="btn btn-primary text-xs py-1.5 px-3">
+                      {autoLabeling ? <Spinner size={15} /> : <Sparkle size={15} weight="fill" />}
+                      <span>{autoLabeling ? "Detecting..." : "Auto-Label (YOLO26)"}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMode("boxes");
+                        setCropRect(null);
+                      }}
+                      title="Click and drag on the image to draw a new box by hand"
+                      className={`btn text-xs py-1.5 px-3 ${mode === "boxes" ? "btn-primary" : "btn-secondary"}`}
+                    >
+                      <PencilSimple size={15} weight="bold" />
+                      <span>Manual Box</span>
                     </button>
                     <button
                       onClick={() => {
                         setMode(mode === "crop" ? "boxes" : "crop");
                         setCropRect(null);
                       }}
-                      className="btn btn-secondary !py-1.5 text-xs"
-                      data-active={mode === "crop"}
-                      style={mode === "crop" ? { backgroundColor: "var(--color-accent)", color: "white", borderColor: "var(--color-accent)" } : {}}
+                      className={`btn text-xs py-1.5 px-3 ${mode === "crop" ? "btn-primary" : "btn-secondary"}`}
                     >
-                      <CropIcon size={13} weight="bold" />
-                      Crop
+                      <CropIcon size={15} weight="bold" />
+                      <span>Crop</span>
                     </button>
-                    <button onClick={copyCurrent} className="btn btn-secondary !py-1.5 text-xs">
-                      <Copy size={13} weight="bold" />
-                      Copy to…
+                    <button onClick={copyCurrent} className="btn btn-secondary text-xs py-1.5 px-3">
+                      <Copy size={15} weight="bold" />
                     </button>
                     <div className="relative">
-                      <button onClick={() => setShowAugment((s) => !s)} className="btn btn-secondary !py-1.5 text-xs">
-                        <MagicWand size={13} weight="bold" />
-                        Augment
+                      <button onClick={() => setShowAugment((s) => !s)} className="btn btn-secondary text-xs py-1.5 px-3">
+                        <MagicWand size={15} weight="bold" />
+                        <span>Augment</span>
                       </button>
                       {showAugment && <AugmentPanel onRun={runAugment} onClose={() => setShowAugment(false)} running={augmenting} />}
                     </div>
-                    <button onClick={excludeCurrent} className="btn btn-secondary !py-1.5 text-xs text-danger">
-                      <Trash size={13} weight="bold" />
-                      Exclude
+                    <button onClick={excludeCurrent} className="btn btn-ghost text-xs py-1.5 px-2 text-rose-600 hover:bg-rose-50">
+                      <Trash size={15} weight="bold" />
                     </button>
                   </div>
                 </div>
@@ -382,70 +476,86 @@ export default function AnnotatePage() {
                   onCropRectChange={setCropRect}
                 />
 
-                <div className="mt-3 flex items-center justify-between">
-                  <p className="text-xs text-ink-2">
+                <div className="mt-4 flex items-center justify-between">
+                  <p className="text-xs text-slate-500">
                     {mode === "crop"
-                      ? "Drag to select the region to keep, then apply."
-                      : unresolvedCount > 0
-                        ? `${unresolvedCount} box${unresolvedCount === 1 ? "" : "es"} carried over from the original labels need a class before you can save — click each dashed gray box and pick one.`
-                        : "Drag on empty space to draw a box · click a box to edit or delete it"}
+                      ? "Drag box to crop image bounds"
+                      : "Manual Box mode: click and drag on an empty part of the image to draw a new box"}
+                    {mode === "boxes" && unresolvedCount > 0 && (
+                      <span className="ml-2 font-semibold text-amber-600">· {unresolvedCount} box(es) need taxonomy assignment</span>
+                    )}
                   </p>
                   {mode === "crop" ? (
-                    <button onClick={applyCrop} disabled={!cropRect || saving} className="btn btn-primary">
-                      {saving ? "Cropping…" : "Apply crop"}
+                    <button onClick={applyCrop} disabled={!cropRect || saving} className="btn btn-primary text-xs">
+                      {saving && <Spinner size={14} />}
+                      {saving ? "Cropping..." : "Apply Crop"}
                     </button>
                   ) : (
-                    <button onClick={save} disabled={!dirty || saving || unresolvedCount > 0} className="btn btn-primary">
-                      <FloppyDisk size={14} weight="bold" />
-                      {saving ? "Saving…" : unresolvedCount > 0 ? `${unresolvedCount} unresolved` : dirty ? "Save changes" : "Saved"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={save} disabled={!dirty || saving || unresolvedCount > 0} className="btn btn-secondary text-xs">
+                        {saving ? <Spinner size={15} /> : <FloppyDisk size={15} weight="bold" />}
+                        {saving ? "Saving..." : dirty ? "Save Changes" : "Saved"}
+                      </button>
+                      <button
+                        onClick={saveAndNext}
+                        disabled={saving || unresolvedCount > 0 || selectedIdx === images.length - 1}
+                        className="btn btn-primary text-xs"
+                        title="Save this image's labels and move to the next one"
+                      >
+                        {saving ? <Spinner size={15} /> : <CaretRight size={15} weight="bold" />}
+                        {saving ? "Saving..." : "Save & Next"}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
             )}
 
-            <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
-              {images.map((img, i) => (
-                <button
-                  key={img.filename + i}
-                  onClick={() => selectImage(i)}
-                  className={`relative aspect-square overflow-hidden rounded-control border transition-all ${
-                    selectedIdx === i ? "border-accent ring-2 ring-accent/30" : "border-border hover:border-border-strong"
-                  }`}
-                >
-                  <img src={mediaUrl(img.image_url)} alt="" loading="lazy" className="h-full w-full object-cover" />
-                  {img.boxes.length > 0 && (
-                    <span className="absolute bottom-0.5 right-0.5 rounded-full bg-black/60 px-1 text-[9px] text-white">{img.boxes.length}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            {hasMore && (
-              <div className="mt-3 flex justify-center">
-                <button onClick={() => loadImages(images.length, false)} disabled={loadingList} className="btn btn-secondary">
-                  {loadingList ? "Loading…" : "Load more"}
-                </button>
+            {/* Images Grid Carousel */}
+            <div className="mt-6">
+              <h3 className="text-xs font-bold text-slate-700 mb-3 uppercase tracking-wider">Folder Images ({images.length})</h3>
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                {images.map((img, i) => (
+                  <button
+                    key={img.filename + i}
+                    onClick={() => selectImage(i)}
+                    className={`relative aspect-square overflow-hidden rounded-xl border transition-all ${
+                      selectedIdx === i ? "border-indigo-600 ring-2 ring-indigo-500/30 scale-95" : "border-slate-200 hover:border-slate-400"
+                    }`}
+                  >
+                    <img src={mediaUrl(img.image_url)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    {img.boxes.length > 0 && (
+                      <span className="absolute bottom-1 right-1 rounded-full bg-slate-900/80 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                        {img.boxes.length}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
-            )}
+              {hasMore && (
+                <div className="mt-4 flex justify-center">
+                  <button onClick={() => loadImages(images.length, false)} disabled={loadingList} className="btn btn-secondary text-xs">
+                    {loadingList ? "Loading..." : "Load More Images"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="card h-fit p-4 text-xs">
-            <h3 className="mb-2 font-semibold text-ink">Legend</h3>
-            <ul className="space-y-1.5">
+          {/* Taxonomy Side Legend */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs h-fit space-y-4">
+            <h3 className="text-sm font-bold text-slate-900">Taxonomy Classes</h3>
+            <div className="space-y-2">
               {(taxonomy?.classes || [])
                 .filter((c) => !c.deprecated)
                 .map((c) => (
-                  <li key={c.id} className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color_hex }} />
-                    <span className="text-ink-2">
-                      {c.id}: {c.name}
-                    </span>
-                  </li>
+                  <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                    <span className="h-3 w-3 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: c.color_hex }} />
+                    <span className="font-bold text-slate-800">#{c.id}</span>
+                    <span className="text-slate-600 font-medium truncate">{c.name}</span>
+                  </div>
                 ))}
-            </ul>
-            <p className="mt-3 border-t border-border pt-3 text-ink-3">
-              Dashed boxes are AI-suggested (YOLO26) and unconfirmed. Edit or delete them, then save to confirm.
-            </p>
+            </div>
           </div>
         </div>
       )}

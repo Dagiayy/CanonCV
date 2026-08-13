@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db import init_db
 from app.routers import annotate, datasets, exports, lineage, normalize, projects, quality, review_queue, runs, splits
 
-app = FastAPI(title="AATB Dataset Normalization", version="0.1.0")
+app = FastAPI(title="CanonCV Dataset Normalization", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useProject } from "../ProjectContext";
 import Sheet from "./Sheet";
+import Spinner from "./Spinner";
 
 export default function NewProjectModal({ onClose }) {
   const { createProject } = useProject();
@@ -47,6 +48,7 @@ export default function NewProjectModal({ onClose }) {
             Cancel
           </button>
           <button type="submit" disabled={saving || !name.trim()} className="btn btn-primary">
+            {saving && <Spinner size={14} />}
             {saving ? "Creating…" : "Create project"}
           </button>
         </div>

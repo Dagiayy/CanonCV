@@ -12,7 +12,16 @@ from app.db import SessionLocal, init_db
 from app import models
 from app.services.scanner import scan_dataset
 
-PROJECT_NAME = "AATB Bicycle Counting"
+PROJECT_NAME = "CanonCV"
+PROJECT_DESCRIPTION = (
+    "Universal computer vision dataset preparation engine and annotation studio — "
+    "normalize multi-source datasets into a canonical taxonomy, audit quality, and "
+    "export training-ready splits for any detection project."
+)
+# Renamed in place (not re-created) if found, so an existing install's dataset/
+# taxonomy/annotation history stays attached to the same project row instead of
+# forking into a duplicate "CanonCV" project alongside the old-named one.
+_LEGACY_PROJECT_NAMES = ["AATB Bicycle Counting"]
 
 TAXONOMY = [
     {"id": 0, "name": "bicycle", "description": "Standard pedal or manual bicycle, single rider, no cargo structure", "color_hex": "#22c55e", "category": "primary"},
@@ -37,10 +46,18 @@ def seed() -> None:
     try:
         project = db.query(models.Project).filter_by(name=PROJECT_NAME).one_or_none()
         if project is None:
-            project = models.Project(
-                name=PROJECT_NAME,
-                description="Camera + Radar Based Bicycle Counting System for the Addis Ababa Transport Bureau (AATB).",
-            )
+            for legacy_name in _LEGACY_PROJECT_NAMES:
+                legacy = db.query(models.Project).filter_by(name=legacy_name).one_or_none()
+                if legacy is not None:
+                    legacy.name = PROJECT_NAME
+                    legacy.description = PROJECT_DESCRIPTION
+                    db.commit()
+                    db.refresh(legacy)
+                    project = legacy
+                    print(f"renamed project {project.id}: {legacy_name!r} -> {PROJECT_NAME!r}")
+                    break
+        if project is None:
+            project = models.Project(name=PROJECT_NAME, description=PROJECT_DESCRIPTION)
             db.add(project)
             db.commit()
             db.refresh(project)

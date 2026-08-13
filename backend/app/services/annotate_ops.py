@@ -16,8 +16,10 @@ Two kinds of folders are supported:
   RAW_DATASETS_DIR is "never written to by this system" (see config.py) — so
   edits go to a parallel _annotate_labels/<same relative path>.txt overlay.
   Existing boxes are shown by translating the source class name to a canonical
-  class by exact name match; anything that doesn't match is flagged
-  needs_review rather than guessed (never map silently, see CLAUDE.md ยง4.3).
+  class by exact name match, or via a short list of unambiguous synonyms (see
+  label_aliases.py, e.g. "person" -> pedestrian); anything that still doesn't
+  match is flagged needs_review rather than guessed (never map silently, see
+  CLAUDE.md ยง4.3).
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ import yaml
 from PIL import Image, ImageEnhance, ImageOps
 
 from app.config import IMAGE_EXTENSIONS, RAW_DATASETS_DIR
+from app.services.label_aliases import resolve_canonical_name
 
 _SKIP_DIR_NAMES = {"_excluded", "_annotate_labels", "labels"}
 
@@ -204,7 +207,8 @@ def read_boxes(folder: Path, image_path: Path, source_names: dict[int, str], can
     A canonical (Annotate-Studio-saved) label always wins if present — it's
     already resolved, no translation needed. Otherwise, for a structured
     external dataset, fall back to its original label file and translate by
-    exact class-name match; anything that doesn't match is flagged
+    exact class-name match (or a known unambiguous synonym, see
+    label_aliases.py); anything that still doesn't match is flagged
     needs_review with class_id=None rather than guessed."""
     structured = bool(source_names)
     canonical_path = _label_path_for_image(folder, image_path, structured)
@@ -217,7 +221,7 @@ def read_boxes(folder: Path, image_path: Path, source_names: dict[int, str], can
     out = []
     for b in _parse_yolo_txt(_source_label_path(folder, image_path)):
         src_name = source_names.get(b["class_id"])
-        canon = canonical_by_name.get(src_name.lower()) if src_name else None
+        canon = canonical_by_name.get(resolve_canonical_name(src_name)) if src_name else None
         if canon:
             out.append({"class_id": canon["id"], "bbox": b["bbox"], "needs_review": False, "source_label": src_name})
         else:

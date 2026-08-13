@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Datasets } from "../api";
 import SampleViewerModal from "./SampleViewerModal";
 import StatusBadge from "./StatusBadge";
+import Spinner from "./Spinner";
 import { Eye } from "@phosphor-icons/react";
 
 const ACTIONS = [
@@ -96,6 +97,7 @@ export default function MappingBuilder({ dataset, taxonomy, onSaved }) {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => save(false)} disabled={saving} className="btn btn-secondary">
+            {saving && <Spinner size={14} />}
             Save draft
           </button>
           <button
@@ -104,6 +106,7 @@ export default function MappingBuilder({ dataset, taxonomy, onSaved }) {
             title={unmappedCount > 0 ? `${unmappedCount} label(s) still unmapped` : ""}
             className="btn btn-primary"
           >
+            {saving && <Spinner size={14} />}
             Mark as ready{unmappedCount > 0 ? ` · ${unmappedCount} unmapped` : ""}
           </button>
         </div>

@@ -9,6 +9,8 @@ from app.services import export_ops
 
 router = APIRouter(tags=["exports"])
 
+VALID_EXPORT_FORMATS = {"yolo", "coco_json", "voc_xml"}
+
 
 def _active_taxonomy(db: Session, project_id: str) -> models.ClassTaxonomy | None:
     return (
@@ -24,6 +26,9 @@ def create_export(project_id: str, body: schemas.ExportCreate, db: Session = Dep
     project = db.query(models.Project).filter_by(id=project_id).one_or_none()
     if project is None:
         raise HTTPException(404, "project not found")
+
+    if body.export_format not in VALID_EXPORT_FORMATS:
+        raise HTTPException(400, f"export_format must be one of {sorted(VALID_EXPORT_FORMATS)}")
 
     split_plan = None
     if body.split_plan_id:
@@ -53,7 +58,15 @@ def create_export(project_id: str, body: schemas.ExportCreate, db: Session = Dep
     )
     version = (latest.version + 1) if latest else 1
 
-    export = models.Export(project_id=project_id, split_plan_id=body.split_plan_id, version=version, tag=body.tag, status="running")
+    export = models.Export(
+        project_id=project_id,
+        split_plan_id=body.split_plan_id,
+        version=version,
+        tag=body.tag,
+        export_format=body.export_format,
+        yolo_variant=body.yolo_variant,
+        status="running",
+    )
     db.add(export)
     db.commit()
     db.refresh(export)

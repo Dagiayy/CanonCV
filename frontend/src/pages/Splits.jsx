@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useProject } from "../ProjectContext";
 import { Projects, Splits } from "../api";
-import { Shuffle } from "@phosphor-icons/react";
+import Spinner from "../components/Spinner";
+import { Scissors, Shuffle } from "@phosphor-icons/react";
 
 function CreateSplitForm({ runs, datasetNames, onCreated }) {
   const { projectId } = useProject();
@@ -51,73 +52,77 @@ function CreateSplitForm({ runs, datasetNames, onCreated }) {
   };
 
   return (
-    <form onSubmit={submit} className="card p-4">
-      <h3 className="mb-3 text-sm font-semibold text-ink">New split plan</h3>
-      {error && <p className="mb-3 rounded-control bg-danger/10 p-2.5 text-sm text-danger">{error}</p>}
+    <form onSubmit={submit} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 className="text-sm font-bold text-slate-900">Create New Dataset Split Plan</h3>
+        <span className="badge badge-accent">Reproducible Seed</span>
+      </div>
 
-      <label className="mb-3 block text-sm font-medium text-ink-2">
-        Name
-        <input className="input mt-1.5" value={name} onChange={(e) => setName(e.target.value)} required />
+      {error && <p className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-semibold text-rose-700">{error}</p>}
+
+      <label className="block text-xs font-semibold text-slate-600">
+        Split Plan Name
+        <input className="input mt-1.5" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. YOLO Train-Val-Test 80-10-10" />
       </label>
 
-      <div className="mb-3">
-        <p className="mb-1.5 text-sm font-medium text-ink-2">Source runs (successful normalization runs to split)</p>
-        <div className="max-h-40 overflow-y-auto rounded-control border border-border p-2">
+      <div>
+        <p className="text-xs font-semibold text-slate-600 mb-1.5">Source Normalization Runs</p>
+        <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200 p-3 bg-slate-50 space-y-1.5">
           {runs.map((r) => (
-            <label key={r.id} className="flex items-center gap-2 py-1 text-xs">
-              <input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={selectedRuns.has(r.id)} onChange={() => toggleRun(r.id)} />
-              <span className="text-ink">{datasetNames[r.dataset_id] || r.dataset_id}</span>
-              <span className="text-ink-3">· {new Date(r.started_at).toLocaleDateString()}</span>
+            <label key={r.id} className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+              <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" checked={selectedRuns.has(r.id)} onChange={() => toggleRun(r.id)} />
+              <span className="font-bold text-slate-900">{datasetNames[r.dataset_id] || r.dataset_id}</span>
+              <span className="text-slate-400 font-mono text-[11px]">({new Date(r.started_at).toLocaleDateString()})</span>
             </label>
           ))}
-          {runs.length === 0 && <p className="text-xs text-ink-3">No successful runs yet.</p>}
+          {runs.length === 0 && <p className="text-xs text-slate-400">No successful normalization runs found.</p>}
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-3">
-        <label className="text-sm font-medium text-ink-2">
-          Group by
-          <select className="input mt-1.5" value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
-            <option value="none">None (per-image stratified)</option>
-            <option value="source_dataset">Source dataset (whole dataset in one split)</option>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label className="text-xs font-semibold text-slate-600">
+          Grouping Policy
+          <select className="input mt-1.5 text-xs" value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+            <option value="none">Per-image Stratified (Preserve Class Ratio)</option>
+            <option value="source_dataset">Group by Source Dataset</option>
           </select>
         </label>
-        <label className="text-sm font-medium text-ink-2">
-          Seed
-          <input type="number" className="input mt-1.5" value={seed} onChange={(e) => setSeed(Number(e.target.value))} />
+        <label className="text-xs font-semibold text-slate-600">
+          Random Seed
+          <input type="number" className="input mt-1.5 text-xs font-mono" value={seed} onChange={(e) => setSeed(Number(e.target.value))} />
         </label>
       </div>
 
-      <label className="mb-3 flex items-center gap-2 text-sm text-ink-2">
-        <input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={useKFolds} onChange={(e) => setUseKFolds(e.target.checked)} />
-        Use k-fold instead of train/val/test
+      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+        <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" checked={useKFolds} onChange={(e) => setUseKFolds(e.target.checked)} />
+        Use K-Fold Cross Validation Instead of Ratio Split
       </label>
 
       {useKFolds ? (
-        <label className="mb-4 block text-sm font-medium text-ink-2">
-          Number of folds
-          <input type="number" min={2} className="input mt-1.5" value={kFolds} onChange={(e) => setKFolds(Number(e.target.value))} />
+        <label className="block text-xs font-semibold text-slate-600">
+          Number of Folds (K)
+          <input type="number" min={2} className="input mt-1.5 text-xs font-mono w-32" value={kFolds} onChange={(e) => setKFolds(Number(e.target.value))} />
         </label>
       ) : (
-        <div className="mb-4 grid grid-cols-3 gap-3">
-          <label className="text-sm font-medium text-ink-2">
-            Train
-            <input type="number" step="0.05" className="input mt-1.5" value={trainRatio} onChange={(e) => setTrainRatio(Number(e.target.value))} />
+        <div className="grid grid-cols-3 gap-3">
+          <label className="text-xs font-semibold text-slate-600">
+            Train Ratio
+            <input type="number" step="0.05" className="input mt-1.5 text-xs font-mono" value={trainRatio} onChange={(e) => setTrainRatio(Number(e.target.value))} />
           </label>
-          <label className="text-sm font-medium text-ink-2">
-            Val
-            <input type="number" step="0.05" className="input mt-1.5" value={valRatio} onChange={(e) => setValRatio(Number(e.target.value))} />
+          <label className="text-xs font-semibold text-slate-600">
+            Val Ratio
+            <input type="number" step="0.05" className="input mt-1.5 text-xs font-mono" value={valRatio} onChange={(e) => setValRatio(Number(e.target.value))} />
           </label>
-          <label className="text-sm font-medium text-ink-2">
-            Test
-            <input type="number" step="0.05" className="input mt-1.5" value={testRatio} onChange={(e) => setTestRatio(Number(e.target.value))} />
+          <label className="text-xs font-semibold text-slate-600">
+            Test Ratio
+            <input type="number" step="0.05" className="input mt-1.5 text-xs font-mono" value={testRatio} onChange={(e) => setTestRatio(Number(e.target.value))} />
           </label>
         </div>
       )}
 
-      <button type="submit" disabled={saving || selectedRuns.size === 0 || !name} className="btn btn-primary">
-        <Shuffle size={14} weight="bold" />
-        {saving ? "Building split…" : "Build split"}
+      <button type="submit" disabled={saving || selectedRuns.size === 0 || !name} className="btn btn-primary text-xs py-2 px-4 shadow-md shadow-indigo-200">
+        {saving ? <Spinner size={16} /> : <Shuffle size={16} weight="bold" />}
+        <span>{saving ? "Building Split..." : "Generate Split Plan"}</span>
       </button>
     </form>
   );
@@ -138,42 +143,53 @@ export default function SplitsPage() {
 
   useEffect(() => {
     if (projectId) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   return (
-    <div>
-      <div className="mb-4">
-        <h2 className="text-[17px] font-semibold tracking-tight text-ink">Dataset splits</h2>
-        <p className="text-xs text-ink-2">Stratified, grouped, reproducible train/val/test (or k-fold) assignments</p>
+    <div className="space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">Dataset Splits & Cross-Validation</h2>
+            <span className="badge badge-accent">Zero Leakage</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Build seed-reproducible stratified train/val/test splits or k-folds with class balance preservation.
+          </p>
+        </div>
       </div>
 
-      <div className="mb-6">
-        <CreateSplitForm runs={runs} datasetNames={datasetNames} onCreated={load} />
-      </div>
+      <CreateSplitForm runs={runs} datasetNames={datasetNames} onCreated={load} />
 
-      <h3 className="mb-2 text-sm font-semibold text-ink">Existing plans</h3>
+      <h3 className="text-sm font-bold text-slate-900 pt-2">Existing Dataset Split Plans</h3>
       <div className="space-y-3">
         {plans.map((p) => (
-          <div key={p.id} className="card p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-ink">
-                {p.name} <span className="text-ink-3">v{p.version}</span>
-              </span>
-              <span className="badge bg-black/[0.05] text-ink-2">
-                {p.k_folds ? `${p.k_folds}-fold` : `${p.train_ratio}/${p.val_ratio}/${p.test_ratio}`} · seed {p.seed} · group_by={p.group_by}
+          <div key={p.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-bold text-slate-900">{p.name}</span>
+                <span className="text-xs text-slate-400 font-mono ml-2">v{p.version}</span>
+              </div>
+              <span className="badge badge-neutral">
+                {p.k_folds ? `${p.k_folds}-fold` : `${p.train_ratio}/${p.val_ratio}/${p.test_ratio}`} · Seed: {p.seed}
               </span>
             </div>
-            <div className="flex flex-wrap gap-3 text-xs text-ink-2">
+            <div className="flex flex-wrap gap-4 text-xs font-semibold text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
               {Object.entries(p.stats).map(([split, s]) => (
-                <span key={split}>
-                  <b className="text-ink">{split}</b>: {s.images} images
-                </span>
+                <div key={split}>
+                  <span className="uppercase text-[10px] text-slate-400 block">{split}</span>
+                  <span className="text-slate-900 font-bold">{s.images.toLocaleString()} Images</span>
+                </div>
               ))}
             </div>
           </div>
         ))}
-        {plans.length === 0 && <p className="text-sm text-ink-2">No split plans yet.</p>}
+        {plans.length === 0 && (
+          <div className="p-8 text-center bg-white rounded-2xl border border-dashed border-slate-200 text-xs text-slate-400">
+            No split plans created yet. Use the form above to partition normalized runs.
+          </div>
+        )}
       </div>
     </div>
   );

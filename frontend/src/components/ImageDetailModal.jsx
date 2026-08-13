@@ -1,7 +1,10 @@
-import { useEffect } from "react";
-import { CaretLeft, CaretRight, ImageBroken, X } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { CaretLeft, CaretRight, ImageBroken, PencilSimple, Trash, X } from "@phosphor-icons/react";
 
-export default function ImageDetailModal({ item, onClose, onPrev, onNext }) {
+export default function ImageDetailModal({ item, onClose, onPrev, onNext, editHref, onDelete }) {
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") onClose();
@@ -11,6 +14,17 @@ export default function ImageDetailModal({ item, onClose, onPrev, onNext }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, onPrev, onNext]);
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    if (!window.confirm(`Remove "${item.file || "this image"}" from the working set?`)) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div
@@ -81,6 +95,23 @@ export default function ImageDetailModal({ item, onClose, onPrev, onNext }) {
             </button>
           </div>
           {item.file && <p className="break-all border-b border-border px-3.5 py-2 font-mono text-[10px] text-ink-3">{item.file}</p>}
+
+          {(editHref || onDelete) && (
+            <div className="flex items-center gap-1.5 border-b border-border px-3 py-2.5">
+              {editHref && (
+                <Link to={editHref} className="btn btn-secondary flex-1 !py-1.5 text-xs">
+                  <PencilSimple size={13} weight="bold" />
+                  Edit / Add Labels
+                </Link>
+              )}
+              {onDelete && (
+                <button onClick={handleDelete} disabled={deleting} className="btn btn-ghost !p-1.5 text-danger hover:bg-danger/10" title="Remove image">
+                  <Trash size={14} weight="bold" />
+                </button>
+              )}
+            </div>
+          )}
+
           <ul className="max-h-[50vh] space-y-2 overflow-y-auto p-3 text-xs sm:max-h-[65vh]">
             {item.boxes.map((b, j) => (
               <li key={j} className="rounded-control border border-border p-2.5">

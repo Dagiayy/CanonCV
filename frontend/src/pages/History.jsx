@@ -24,89 +24,111 @@ export default function History() {
   );
 
   return (
-    <div>
-      <h2 className="mb-4 text-[17px] font-semibold tracking-tight text-ink">Normalization run history</h2>
+    <div className="space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">Run History & Logs</h2>
+            <span className="badge badge-accent">Audit Trail</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Historical execution log of dataset normalization runs, label counts, and output artifacts.
+          </p>
+        </div>
 
-      <div className="mb-4 flex gap-2">
-        <select className="input w-auto py-1.5 text-sm" value={datasetFilter} onChange={(e) => setDatasetFilter(e.target.value)}>
-          <option value="">All datasets</option>
-          {Object.entries(datasetNames).map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <select className="input w-auto py-1.5 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">All statuses</option>
-          {["queued", "running", "success", "failed", "cancelled"].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select className="input text-xs py-2 w-44 font-semibold" value={datasetFilter} onChange={(e) => setDatasetFilter(e.target.value)}>
+            <option value="">All Datasets</option>
+            {Object.entries(datasetNames).map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <select className="input text-xs py-2 w-36 font-semibold" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All Statuses</option>
+            {["queued", "running", "success", "failed", "cancelled"].map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+      {/* History Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider text-[11px]">
             <tr>
-              <th className="px-3.5 py-2.5">Dataset</th>
-              <th className="px-3.5 py-2.5">Started</th>
-              <th className="px-3.5 py-2.5">Status</th>
-              <th className="px-3.5 py-2.5">Images</th>
-              <th className="px-3.5 py-2.5">Warnings</th>
-              <th className="px-3.5 py-2.5"></th>
+              <th className="py-3 px-4">Dataset Name</th>
+              <th className="py-3 px-4">Started At</th>
+              <th className="py-3 px-4">Status</th>
+              <th className="py-3 px-4">Images Written</th>
+              <th className="py-3 px-4">Warnings</th>
+              <th className="py-3 px-4 text-right">Details</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100 text-slate-700">
             {filtered.map((r) => (
               <Fragment key={r.id}>
                 <tr
-                  className="cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60"
+                  className="cursor-pointer hover:bg-slate-50/80 transition-colors"
                   onClick={() => setExpanded(expanded === r.id ? null : r.id)}
                 >
-                  <td className="px-3.5 py-2.5 text-ink">{datasetNames[r.dataset_id] || r.dataset_id}</td>
-                  <td className="px-3.5 py-2.5 text-ink-2">{new Date(r.started_at).toLocaleString()}</td>
-                  <td className="px-3.5 py-2.5">
+                  <td className="py-3.5 px-4 font-bold text-slate-900">{datasetNames[r.dataset_id] || r.dataset_id}</td>
+                  <td className="py-3.5 px-4 text-slate-500 font-medium">{new Date(r.started_at).toLocaleString()}</td>
+                  <td className="py-3.5 px-4">
                     <StatusBadge status={r.status} />
                   </td>
-                  <td className="px-3.5 py-2.5 text-ink-2">
+                  <td className="py-3.5 px-4 font-semibold text-slate-800">
                     {r.stats?.images_written ?? "-"} / {r.stats?.images_processed ?? "-"}
                   </td>
-                  <td className="px-3.5 py-2.5 text-ink-2">{r.stats?.bbox_warnings?.length ?? 0}</td>
-                  <td className="px-3.5 py-2.5">
-                    <CaretDown
-                      size={13}
-                      weight="bold"
-                      className={`text-ink-3 transition-transform duration-200 ${expanded === r.id ? "rotate-180" : ""}`}
-                      style={{ transitionTimingFunction: "var(--ease-spring)" }}
-                    />
+                  <td className="py-3.5 px-4">
+                    {r.stats?.bbox_warnings?.length ? (
+                      <span className="badge badge-warning text-[10px]">{r.stats.bbox_warnings.length} Warnings</span>
+                    ) : (
+                      <span className="text-slate-400">0</span>
+                    )}
+                  </td>
+                  <td className="py-3.5 px-4 text-right">
+                    <button className="btn btn-ghost text-xs p-1 text-slate-500">
+                      <CaretDown
+                        size={16}
+                        weight="bold"
+                        className={`transition-transform duration-200 ${expanded === r.id ? "rotate-180" : ""}`}
+                      />
+                    </button>
                   </td>
                 </tr>
                 {expanded === r.id && (
-                  <tr className="animate-fade-in-up border-t border-border bg-surface-2/50">
-                    <td colSpan={6} className="px-3.5 py-4 text-xs">
-                      <p className="mb-1 break-all font-mono text-ink-2">{r.output_path}</p>
-                      <p className="text-ink-2">
-                        Annotations processed: {r.stats?.annotations_processed}, dropped: {r.stats?.dropped_label_count}, review
-                        queue: {r.stats?.review_queue_count}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {Object.entries(r.stats?.per_class_count_after || {}).map(([k, v]) => (
-                          <span key={k} className="badge bg-black/[0.06] text-ink-2">
-                            {k}: {v}
-                          </span>
-                        ))}
-                      </div>
-                      {r.log_excerpt && (
-                        <pre className="mt-2 whitespace-pre-wrap rounded-control bg-danger/10 p-2.5 text-danger">{r.log_excerpt}</pre>
-                      )}
-                      {r.status === "success" && (
-                        <div className="mt-3">
-                          <h4 className="mb-2 font-semibold text-ink">Normalized output</h4>
-                          <NormalizedOutputGallery run={r} />
+                  <tr className="bg-slate-50/80 animate-fade-in-up">
+                    <td colSpan={6} className="p-4 border-t border-b border-slate-200">
+                      <div className="space-y-3">
+                        <p className="font-mono text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200 break-all">{r.output_path}</p>
+                        <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                          <span>Annotations: <b>{r.stats?.annotations_processed}</b></span>
+                          <span>Dropped: <b>{r.stats?.dropped_label_count}</b></span>
+                          <span>Review Queue: <b>{r.stats?.review_queue_count}</b></span>
                         </div>
-                      )}
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {Object.entries(r.stats?.per_class_count_after || {}).map(([k, v]) => (
+                            <span key={k} className="badge badge-neutral text-xs">
+                              {k}: {v}
+                            </span>
+                          ))}
+                        </div>
+                        {r.log_excerpt && (
+                          <pre className="whitespace-pre-wrap rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-mono text-rose-700">{r.log_excerpt}</pre>
+                        )}
+                        {r.status === "success" && (
+                          <div className="pt-2">
+                            <h4 className="text-xs font-bold text-slate-800 mb-2">Normalized Output Preview</h4>
+                            <NormalizedOutputGallery run={r} />
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -115,9 +137,9 @@ export default function History() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <ClockCounterClockwise size={26} className="mb-2 text-ink-3" />
-            <p className="text-sm text-ink-2">No runs match these filters.</p>
+          <div className="py-16 text-center text-slate-400">
+            <ClockCounterClockwise size={32} className="mx-auto mb-2 text-slate-300" />
+            <p className="text-sm font-bold text-slate-700">No matching normalization runs</p>
           </div>
         )}
       </div>

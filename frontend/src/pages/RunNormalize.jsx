@@ -2,69 +2,64 @@ import { useEffect, useRef, useState } from "react";
 import { useProject } from "../ProjectContext";
 import { Datasets, Normalize, Projects } from "../api";
 import StatusBadge from "../components/StatusBadge";
-import { Play, WarningCircle } from "@phosphor-icons/react";
+import Spinner from "../components/Spinner";
+import { Lightning, Play, WarningCircle } from "@phosphor-icons/react";
 
 function JobPanel({ job }) {
   if (!job) return null;
   const stats = job.stats || {};
   return (
-    <div className="card animate-fade-in-up p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-medium text-ink">{job._datasetName}</span>
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs animate-fade-in-up space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-slate-900">{job._datasetName}</span>
         <StatusBadge status={job.status} />
       </div>
+
       {(job.status === "queued" || job.status === "running") && (
         <div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06]">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-1.5 rounded-full bg-accent transition-all duration-300"
-              style={{ width: `${job.progress_percent}%`, transitionTimingFunction: "var(--ease-spring)" }}
+              className="h-2 rounded-full bg-indigo-600 transition-all duration-300"
+              style={{ width: `${job.progress_percent}%` }}
             />
           </div>
-          <p className="mt-1.5 truncate text-xs text-ink-2">
-            {job.progress_percent}% · {job.current_file}
+          <p className="mt-2 truncate text-xs font-semibold text-slate-600">
+            {job.progress_percent}% · Processing {job.current_file}
           </p>
         </div>
       )}
+
       {job.status === "failed" && (
-        <pre className="whitespace-pre-wrap rounded-control bg-danger/10 p-2.5 text-xs text-danger">{job.log_excerpt}</pre>
+        <pre className="whitespace-pre-wrap rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-mono text-rose-700">{job.log_excerpt}</pre>
       )}
+
       {job.status === "success" && (
-        <div className="space-y-1 text-xs text-ink-2">
-          <p>
-            Images written <b className="text-ink">{stats.images_written}</b> / processed {stats.images_processed}
+        <div className="space-y-2 text-xs text-slate-600">
+          <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-slate-50 border border-slate-100">
+            <div>
+              <span className="text-[10px] text-slate-400 block uppercase font-bold">Images Output</span>
+              <span className="font-bold text-slate-900">{stats.images_written} / {stats.images_processed}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block uppercase font-bold">Annotations</span>
+              <span className="font-bold text-slate-900">{stats.annotations_processed}</span>
+            </div>
+          </div>
+          <p className="text-slate-500">
+            Dropped labels: {stats.dropped_label_count} · Review queue entries: {stats.review_queue_count}
           </p>
-          <p>Annotations processed: {stats.annotations_processed}</p>
-          <p>
-            Dropped: {stats.dropped_label_count} (bbox-fatal: {stats.bbox_fatal_drops})
-          </p>
-          <p>Sent to review queue: {stats.review_queue_count}</p>
-          <p className="break-all pt-1 font-mono text-[11px] text-ink-3">{job.output_path}</p>
-          <div className="pt-2">
-            <p className="font-medium text-ink">Per-class counts after mapping</p>
-            <div className="mt-1.5 flex flex-wrap gap-1">
+          <p className="break-all font-mono text-[11px] text-slate-400 bg-slate-100 p-2 rounded-lg">{job.output_path}</p>
+          
+          <div className="pt-1">
+            <p className="font-bold text-slate-800 mb-1">Per-Class Counts Post-Mapping:</p>
+            <div className="flex flex-wrap gap-1.5">
               {Object.entries(stats.per_class_count_after || {}).map(([k, v]) => (
-                <span key={k} className="badge bg-black/[0.05] text-ink-2">
+                <span key={k} className="badge badge-neutral text-xs">
                   {k}: {v}
                 </span>
               ))}
             </div>
           </div>
-          {stats.bbox_warnings?.length > 0 && (
-            <details className="pt-1">
-              <summary className="flex cursor-pointer items-center gap-1.5 font-medium text-warning">
-                <WarningCircle size={13} weight="bold" />
-                {stats.bbox_warnings.length} bbox/coverage warning{stats.bbox_warnings.length === 1 ? "" : "s"}
-              </summary>
-              <ul className="mt-1.5 max-h-32 space-y-0.5 overflow-y-auto rounded-control bg-surface-2 p-2">
-                {stats.bbox_warnings.map((w, i) => (
-                  <li key={i}>
-                    {w.file}: {w.issue}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
         </div>
       )}
     </div>
@@ -75,7 +70,7 @@ export default function RunNormalize() {
   const { projectId } = useProject();
   const [datasets, setDatasets] = useState([]);
   const [selected, setSelected] = useState(new Set());
-  const [jobs, setJobs] = useState({}); // jobId -> run
+  const [jobs, setJobs] = useState({});
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const pollRef = useRef(null);
@@ -94,7 +89,6 @@ export default function RunNormalize() {
   useEffect(() => {
     if (projectId) load();
     return () => clearInterval(pollRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const toggle = (id) => {
@@ -142,52 +136,67 @@ export default function RunNormalize() {
   const readyDatasets = datasets.filter((d) => d._mappingStatus === "ready");
 
   return (
-    <div>
-      <h2 className="mb-1 text-[17px] font-semibold tracking-tight text-ink">Run normalization</h2>
-      <p className="mb-4 text-sm text-ink-2">Select datasets whose mapping table is marked "ready", then run.</p>
+    <div className="space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">Normalize Engine</h2>
+            <span className="badge badge-accent">ETL Pipeline</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Execute deterministic label mapping, coordinate auditing, and output normalized image variants.
+          </p>
+        </div>
+        <button
+          onClick={run}
+          disabled={running || selected.size === 0}
+          className="btn btn-primary text-xs py-2 px-4 shadow-md shadow-indigo-200"
+        >
+          {running ? <Spinner size={16} /> : <Play size={16} weight="fill" />}
+          <span>{running ? "Queuing Jobs…" : `Execute Normalization (${selected.size} Selected)`}</span>
+        </button>
+      </div>
 
-      {error && <p className="mb-3 rounded-control bg-danger/10 p-2.5 text-sm text-danger">{error}</p>}
+      {error && <p className="rounded-xl bg-rose-50 border border-rose-200 p-3.5 text-xs font-semibold text-rose-700">{error}</p>}
 
-      <div className="card mb-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+      {/* Datasets Selection Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider text-[11px]">
             <tr>
-              <th className="px-3.5 py-2.5"></th>
-              <th className="px-3.5 py-2.5">Dataset</th>
-              <th className="px-3.5 py-2.5">Mapping status</th>
-              <th className="px-3.5 py-2.5">Images</th>
+              <th className="py-3 px-4 w-10">Select</th>
+              <th className="py-3 px-4">Dataset</th>
+              <th className="py-3 px-4">Mapping Status</th>
+              <th className="py-3 px-4">Source Images</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100 text-slate-700">
             {datasets.map((d) => (
-              <tr key={d.id} className="border-t border-border transition-colors hover:bg-surface-2/60">
-                <td className="px-3.5 py-2.5">
+              <tr key={d.id} className="hover:bg-slate-50/80 transition-colors">
+                <td className="py-3.5 px-4">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 accent-accent"
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
                     disabled={d._mappingStatus !== "ready"}
                     checked={selected.has(d.id)}
                     onChange={() => toggle(d.id)}
                   />
                 </td>
-                <td className="px-3.5 py-2.5 text-ink">{d.name}</td>
-                <td className="px-3.5 py-2.5">
-                  <StatusBadge status={d._mappingStatus || "pending"}>{d._mappingStatus || "no mapping table"}</StatusBadge>
+                <td className="py-3.5 px-4 font-bold text-slate-900">{d.name}</td>
+                <td className="py-3.5 px-4">
+                  <StatusBadge status={d._mappingStatus || "pending"}>{d._mappingStatus || "No Mapping Table"}</StatusBadge>
                 </td>
-                <td className="px-3.5 py-2.5 text-ink-2">{d.num_images.toLocaleString()}</td>
+                <td className="py-3.5 px-4 font-semibold">{d.num_images.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <button onClick={run} disabled={running || selected.size === 0} className="btn btn-primary mb-6">
-        <Play size={14} weight="fill" />
-        Run normalization · {selected.size} selected, {readyDatasets.length} ready total
-      </button>
-
+      {/* Execution Jobs Grid */}
       {Object.keys(jobs).length > 0 && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {Object.values(jobs).map((j) => (
             <JobPanel key={j.id} job={j} />
           ))}

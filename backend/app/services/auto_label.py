@@ -14,18 +14,16 @@ import os
 from pathlib import Path
 
 from app.config import PROJECT_ROOT
+from app.services.label_aliases import resolve_canonical_name
 
 MODEL_PATH = Path(os.environ.get("YOLO26_WEIGHTS", PROJECT_ROOT / "models" / "yolo26s-seg.pt"))
 
-COCO_TO_CANONICAL = {
-    "bicycle": "bicycle",
-    "person": "pedestrian",
-    "motorcycle": "motorcycle",
-    "car": "car",
-    "truck": "truck",
-}
+# The COCO classes this deployment's traffic corridor cares about. "bus" gets a
+# drawn box but, deliberately, no pre-filled class — a generic COCO "bus"
+# detection can't distinguish minibus/mid_bus/large_bus (same
+# never-guess-on-ambiguous-mapping rule used everywhere else in this app).
 COCO_UNMAPPED_BUT_RELEVANT = {"bus"}
-RELEVANT_COCO = set(COCO_TO_CANONICAL) | COCO_UNMAPPED_BUT_RELEVANT
+RELEVANT_COCO = {"bicycle", "person", "motorcycle", "car", "truck"} | COCO_UNMAPPED_BUT_RELEVANT
 
 _model = None
 
@@ -57,7 +55,7 @@ def suggest_boxes(image_path: Path, taxonomy_classes: list[dict], confidence: fl
         if coco_name not in RELEVANT_COCO:
             continue
         xc, yc, w, h = (float(v) for v in box.xywhn[0])
-        canonical_name = COCO_TO_CANONICAL.get(coco_name)
+        canonical_name = resolve_canonical_name(coco_name) if coco_name not in COCO_UNMAPPED_BUT_RELEVANT else None
         cls = by_name.get(canonical_name) if canonical_name else None
         out.append(
             {

@@ -228,6 +228,8 @@ class ExportCreate(BaseModel):
     split_plan_id: str | None = None
     run_ids: list[str] | None = None  # used when split_plan_id is None: export without splitting
     tag: str = ""
+    export_format: str = "yolo"  # yolo | coco_json | voc_xml
+    yolo_variant: str = "yolo26"  # e.g. yolo26 | yolo11 | yolov8 | custom free text — only used when export_format == "yolo"
 
 
 class ExportOut(ORMModel):
@@ -236,6 +238,8 @@ class ExportOut(ORMModel):
     split_plan_id: str | None
     version: int
     tag: str
+    export_format: str
+    yolo_variant: str
     created_at: datetime
     status: str
     output_path: str

@@ -78,6 +78,53 @@ def image_quality(dataset_id: str, sample_size: int = Query(default=300, le=2000
     return quality.image_quality_report(_image_paths(ds), sample_size=sample_size)
 
 
+@router.get("/datasets/{dataset_id}/quality/summary")
+def quality_summary(
+    dataset_id: str,
+    max_images_for_near_dup: int = Query(default=quality.DEFAULT_MAX_IMAGES_FOR_NEAR_DUP),
+    image_quality_sample_size: int = Query(default=300, le=2000),
+    db: Session = Depends(get_db),
+):
+    """Everything the Quality Audit page needs for one dataset, in a single call —
+    duplicates, bbox validation, outliers, image quality, per-dataset source-label
+    balance, and a rolled-up health score — so selecting a dataset shows the full
+    picture immediately instead of requiring four separate manual audit runs."""
+    ds = _get_dataset(db, dataset_id)
+    image_paths = _image_paths(ds)
+    by_image = _annotations_by_image(ds)
+
+    dup_report = quality.find_duplicates(image_paths, max_images_for_near_dup=max_images_for_near_dup)
+    val_report = quality.validate_annotations(by_image)
+    outliers = quality.outlier_report(by_image)
+    img_quality = quality.image_quality_report(image_paths, sample_size=image_quality_sample_size)
+    class_balance = quality.class_balance_from_source_classes(ds.source_classes)
+    health = quality.compute_health_score(ds.num_images, dup_report, val_report, outliers, img_quality, class_balance)
+
+    return {
+        "dataset_id": dataset_id,
+        "num_images": ds.num_images,
+        "num_annotations": ds.num_annotations,
+        "health": health,
+        "class_balance": class_balance,
+        "duplicates": {
+            "images_scanned": dup_report.images_scanned,
+            "exact_duplicate_groups": dup_report.exact_groups,
+            "exact_duplicate_group_count": len(dup_report.exact_groups),
+            "near_duplicate_pairs": dup_report.near_duplicate_pairs,
+            "near_dup_scan_skipped": dup_report.near_dup_scan_skipped,
+        },
+        "validation": {
+            "images_checked": val_report.images_checked,
+            "annotations_checked": val_report.annotations_checked,
+            "bbox_warnings": val_report.bbox_warnings,
+            "orphan_images": val_report.orphan_images,
+            "orphan_image_count": len(val_report.orphan_images),
+        },
+        "outliers": outliers,
+        "image_quality": img_quality,
+    }
+
+
 @router.get("/projects/{project_id}/quality/class-balance")
 def class_balance(project_id: str, db: Session = Depends(get_db)):
     tax = (

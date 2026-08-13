@@ -11,6 +11,38 @@ It solves the fundamental challenge of turning raw, multi-source, inconsistently
 
 ---
 
+## 📷 Interface & Screenshots
+
+### 📊 Executive Dashboard & Dataset Health
+*Real-time project overview, dataset stats, normalization progress, and class distribution breakdown.*
+![Dashboard](docs/screenshots/01_dashboard.png)
+
+### 🏷️ Canonical Taxonomy Editor
+*Define, edit, and freeze standardized class categories, supercategories, and keyboard shortcuts.*
+![Taxonomy Editor](docs/screenshots/02_taxonomy_editor.png)
+
+### 🎨 Bounding Box Annotation Studio & AI Auto-Labeling
+*Interactive bounding box canvas with AI auto-labeling, crop tools, and class mapping support.*
+![Annotation Studio](docs/screenshots/03_annotation_studio.png)
+
+### 🛡️ Data Quality & Outlier Auditing
+*Automated sanity checks for zero-area boxes, out-of-bounds coordinates, aspect ratio anomalies, and near-duplicate detection.*
+![Quality Auditing](docs/screenshots/04_quality_auditing.png)
+
+### ✂️ Leakage-Free Dataset Splitting
+*Seed-reproducible train/validation/test splitting with stratification and group isolation.*
+![Dataset Splits](docs/screenshots/05_dataset_splits.png)
+
+### 📦 Multi-Format Export Engine
+*Versioned dataset snapshot exports in YOLO, COCO, Pascal VOC, and TensorFlow Record formats.*
+![Export Engine](docs/screenshots/06_export_engine.png)
+
+### 🔍 Label Mapping & Human Review Queue
+*Human-in-the-loop review queue for ambiguous source labels, preventing silent misclassifications.*
+![Review Queue](docs/screenshots/07_review_queue.png)
+
+---
+
 ## Key Capabilities
 
 ### 🔄 1. Multi-Source Dataset Normalization & Merging

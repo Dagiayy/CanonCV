@@ -49,6 +49,7 @@ export const Datasets = {
   updateNotes: (id, body) => api.patch(`/datasets/${id}/notes`, body).then((r) => r.data),
   samples: (id, params) => api.get(`/datasets/${id}/samples`, { params }).then((r) => r.data),
   images: (id, params) => api.get(`/datasets/${id}/images`, { params }).then((r) => r.data),
+  imagesCount: (id, params) => api.get(`/datasets/${id}/images/count`, { params }).then((r) => r.data),
   mapping: (id) => api.get(`/datasets/${id}/mapping`).then((r) => r.data),
   mappingHistory: (id) => api.get(`/datasets/${id}/mapping/history`).then((r) => r.data),
   saveMapping: (id, body) => api.post(`/datasets/${id}/mapping`, body).then((r) => r.data),
@@ -110,6 +111,7 @@ export const Quality = {
   outliers: (datasetId) => api.get(`/datasets/${datasetId}/quality/outliers`).then((r) => r.data),
   imageQuality: (datasetId, params) => api.get(`/datasets/${datasetId}/quality/image-quality`, { params }).then((r) => r.data),
   classBalance: (projectId) => api.get(`/projects/${projectId}/quality/class-balance`).then((r) => r.data),
+  summary: (datasetId, params) => api.get(`/datasets/${datasetId}/quality/summary`, { params }).then((r) => r.data),
 };
 
 export const Splits = {

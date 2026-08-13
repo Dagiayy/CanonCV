@@ -141,6 +141,8 @@ class Export(Base):
     split_plan_id: Mapped[str | None] = mapped_column(ForeignKey("split_plans.id"), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     tag: Mapped[str] = mapped_column(String, default="")  # optional semantic tag, e.g. "bicycle-dataset-v2.3"
+    export_format: Mapped[str] = mapped_column(String, default="yolo")  # yolo | coco_json | voc_xml
+    yolo_variant: Mapped[str] = mapped_column(String, default="yolo26")  # only meaningful when export_format == "yolo"
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     status: Mapped[str] = mapped_column(String, default="queued")  # queued|running|success|failed
     output_path: Mapped[str] = mapped_column(String, default="")

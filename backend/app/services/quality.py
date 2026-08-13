@@ -239,6 +239,89 @@ def image_quality_report(image_paths: list[Path], sample_size: int = 300) -> dic
 # each — very different implications for training data diversity)
 
 
+def class_balance_from_source_classes(source_classes: list[dict]) -> dict:
+    """Per-dataset source-label balance, straight from the scan (source_classes =
+    [{label, count}]) — no mapping table or normalization run required, so this is
+    available the moment a dataset is registered, not just after it's been mapped
+    and normalized. Flags any label far rarer than the dataset's most common one,
+    per CLAUDE.md ยง4.4 ("flag any class with a low instance count early")."""
+    if not source_classes:
+        return {"classes": [], "max_count": 0, "flagged_labels": []}
+    counts = [c["count"] for c in source_classes]
+    max_count = max(counts)
+    threshold = max(3, round(max_count * 0.05))  # rarer than 5% of the dominant label, or under 3 instances
+    flagged = [c["label"] for c in source_classes if c["count"] < threshold]
+    classes = sorted(source_classes, key=lambda c: -c["count"])
+    return {"classes": classes, "max_count": max_count, "rarity_threshold": threshold, "flagged_labels": flagged}
+
+
+# ---- Overall dataset health score: a single number rolling up every check below,
+# so a QA reviewer gets an at-a-glance signal before drilling into any one report ----
+
+
+def compute_health_score(
+    num_images: int,
+    dup_report: DuplicateReport,
+    val_report: ValidationReport,
+    outliers: dict,
+    img_quality: dict,
+    class_balance: dict,
+) -> dict:
+    breakdown: list[dict] = []
+    score = 100.0
+
+    dup_images = sum(len(g) for g in dup_report.exact_groups)
+    dup_ratio = dup_images / max(num_images, 1)
+    dup_penalty = min(20.0, dup_ratio * 100 * 1.5)
+    if dup_penalty > 0.5:
+        breakdown.append({"category": "duplicates", "penalty": round(dup_penalty, 1), "detail": f"{dup_images} image(s) in exact-duplicate groups"})
+    score -= dup_penalty
+
+    orphan_ratio = len(val_report.orphan_images) / max(val_report.images_checked, 1)
+    orphan_penalty = min(15.0, orphan_ratio * 100 * 0.5)
+    if orphan_penalty > 0.5:
+        breakdown.append({"category": "orphan_images", "penalty": round(orphan_penalty, 1), "detail": f"{len(val_report.orphan_images)} image(s) with zero annotations"})
+    score -= orphan_penalty
+
+    bbox_ratio = len(val_report.bbox_warnings) / max(val_report.annotations_checked, 1)
+    bbox_penalty = min(25.0, bbox_ratio * 100 * 2.0)
+    if bbox_penalty > 0.5:
+        breakdown.append({"category": "bbox_integrity", "penalty": round(bbox_penalty, 1), "detail": f"{len(val_report.bbox_warnings)} coordinate/geometry warning(s)"})
+    score -= bbox_penalty
+
+    outlier_ratio = outliers.get("flagged_total", 0) / max(outliers.get("boxes_checked", 0), 1)
+    outlier_penalty = min(15.0, outlier_ratio * 100 * 0.75)
+    if outlier_penalty > 0.5:
+        breakdown.append({"category": "outliers", "penalty": round(outlier_penalty, 1), "detail": f"{outliers.get('flagged_total', 0)} aspect-ratio/size outlier box(es)"})
+    score -= outlier_penalty
+
+    iq_ratio = img_quality.get("flagged_total", 0) / max(img_quality.get("images_scanned", 0), 1)
+    iq_penalty = min(15.0, iq_ratio * 100 * 0.75)
+    if iq_penalty > 0.5:
+        breakdown.append({"category": "image_quality", "penalty": round(iq_penalty, 1), "detail": f"{img_quality.get('flagged_total', 0)} blurry/over-under-exposed image(s)"})
+    score -= iq_penalty
+
+    n_flagged_labels = len(class_balance.get("flagged_labels", []))
+    n_labels = max(len(class_balance.get("classes", [])), 1)
+    balance_penalty = min(10.0, (n_flagged_labels / n_labels) * 20)
+    if balance_penalty > 0.5:
+        breakdown.append({"category": "class_balance", "penalty": round(balance_penalty, 1), "detail": f"{n_flagged_labels} source label(s) severely under-represented"})
+    score -= balance_penalty
+
+    score = max(0, round(score))
+    if score >= 90:
+        grade = "A"
+    elif score >= 75:
+        grade = "B"
+    elif score >= 60:
+        grade = "C"
+    elif score >= 40:
+        grade = "D"
+    else:
+        grade = "F"
+    return {"score": score, "grade": grade, "breakdown": breakdown}
+
+
 def class_balance_from_labels_dir(labels_dir: Path, class_by_id: dict) -> dict[str, dict]:
     instance_counts: dict[str, int] = defaultdict(int)
     image_counts: dict[str, int] = defaultdict(int)
